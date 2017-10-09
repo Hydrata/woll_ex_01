@@ -1,0 +1,1 @@
+This file is just here to ensure the /outputs folder is created.
