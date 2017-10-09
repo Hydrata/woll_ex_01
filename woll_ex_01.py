@@ -10,7 +10,7 @@ import anuga.utilities.quantity_setting_functions as qs
 import anuga.utilities.spatialInputUtil as su
 import getpass
 
-def run2_woll_ex_01(sim_id):
+def run_woll_ex_01(sim_id):
     print "run2_woll_ex_01 has fired with sim_id: %s" % sim_id
     base_dir = os.getcwd() + '/woll_ex_01'
     print "base_dir is: %s" % base_dir
