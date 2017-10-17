@@ -10,8 +10,8 @@ import anuga.utilities.quantity_setting_functions as qs
 import anuga.utilities.spatialInputUtil as su
 import getpass
 
-def run_woll_ex_01(sim_id):
-    print "run2_woll_ex_01 has fired with sim_id: %s" % sim_id
+def start_woll_ex_01(run_id):
+    print "start_woll_ex_01 has fired with run_id: %s" % run_id
     base_dir = os.getcwd() + '/woll_ex_01'
     print "base_dir is: %s" % base_dir
 
@@ -46,7 +46,6 @@ def run_woll_ex_01(sim_id):
     #bounding_polygon = [[W, S], [E, S], [E, N], [W, N]]
     #interior_regions = anuga.read_polygon_dir(CatchmentDictionary, 'Model/Bdy')
     bounding_polygon = su.read_polygon(base_dir + '/inputs/Bdy/bdy_02.shp')
-    #https://hydrata.com/geoserver/wfs?format_options=charset%3AUTF-8&typename=geonode%3Abdy_02&outputFormat=SHAPE-ZIP&version=1.0.0&service=WFS&request=GetFeature
     create_mesh_from_regions(bounding_polygon,
         boundary_tags={'south': [0], 'east': [1], 'north': [2], 'west': [3]},
         maximum_triangle_area=50,
@@ -57,6 +56,7 @@ def run_woll_ex_01(sim_id):
 
     domain = Domain(meshname, use_cache=False, verbose=True)
     domain.set_name(outname)
+    domain.set_datadir(base_dir + '/outputs')
     print domain.statistics()
 
     poly_fun_pairs = [['Extent', basename + '.tif']]
@@ -76,11 +76,13 @@ def run_woll_ex_01(sim_id):
 
     Rainfall_Gauge_directory = base_dir + '/inputs/Rainfall/Gauge/'
     for filename in os.listdir(Rainfall_Gauge_directory):
-        Gaugefile = Rainfall_Gauge_directory+filename
-        Rainfile = base_dir + '/inputs/Rainfall/rain/rain.tms'
-        polygon = anuga.read_polygon(Gaugefile)
-        rainfall = anuga.file_function(Rainfile, quantities='rate')
-        op1 = Polygonal_rate_operator(domain, rate=rainfall, factor=1.0e-3, polygon=polygon, default_rate = 0.0)
+        # only process shapefiles, and only then the .shp:
+        if '.shp' in filename:
+            Gaugefile = Rainfall_Gauge_directory + filename
+            Rainfile = base_dir + '/inputs/Rainfall/rain/rain.tms'
+            polygon = su.read_polygon(Gaugefile)
+            rainfall = anuga.file_function(Rainfile, quantities='rate')
+            op1 = Polygonal_rate_operator(domain, rate=rainfall, factor=1.0e-3, polygon=polygon, default_rate = 0.0)
 
     #----------------------------------------------------------------------------------------------------------------------------------------------------
     # SETUP BOUNDARY CONDITIONS
