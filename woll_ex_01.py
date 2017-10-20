@@ -28,8 +28,8 @@ def start_woll_ex_01(run_id):
     #----------------------------------------------------------------------------------------------------------------------------------------------------
 
     basename = base_dir + '/inputs/DEM/dem_existing_01'
-    outname = 'woll_ex_01'
-    meshname = base_dir + '/outputs/woll_ex_01.msh'
+    outname = run_id
+    meshname = base_dir + '/outputs/woll_ex_01' + '_' + run_id + '.msh'
 
     #----------------------------------------------------------------------------------------------------------------------------------------------------
     # ENTER DOMAIN COORDINATES
@@ -109,4 +109,5 @@ def start_woll_ex_01(run_id):
 
 if __name__ == "__main__":
     # TODO: parse argv for local development
-    run_woll_ex_01('1')
+    run_id = 'local_'
+    start_woll_ex_01(run_id)
