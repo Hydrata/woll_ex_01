@@ -29,7 +29,7 @@ def start_woll_ex_01(run_id):
 
     basename = base_dir + '/inputs/DEM/dem_existing_01'
     outname = run_id
-    meshname = base_dir + '/outputs/woll_ex_01' + '_' + run_id + '.msh'
+    meshname = base_dir + '/outputs/' + run_id + '.msh'
 
     #----------------------------------------------------------------------------------------------------------------------------------------------------
     # ENTER DOMAIN COORDINATES
