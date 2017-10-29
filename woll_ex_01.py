@@ -2,17 +2,18 @@
 # IMPORT NECESSARY MODULES
 #----------------------------------------------------------------------------------------------------------------------------------------------------
 print 'Setting up Simulation:- Importing Modules'
-
 import anuga, numpy, time, os, glob
 from anuga.operators.rate_operators import Polygonal_rate_operator
 from anuga import file_function, Polygon_function, read_polygon, create_mesh_from_regions, Domain
 import anuga.utilities.quantity_setting_functions as qs
 import anuga.utilities.spatialInputUtil as su
 import getpass
+from ..database_utils import write_percentage_complete
 
-def start_woll_ex_01(run_id):
+
+def start_woll_ex_01(run_id, Runs, session):
     print "start_woll_ex_01 has fired with run_id: %s" % run_id
-    base_dir = os.getcwd() + '/woll_ex_01'
+    base_dir = os.getcwd() + '/tasks/woll_ex_01'
     print "base_dir is: %s" % base_dir
 
     #print "linux user is: " + getpass.getuser()
@@ -101,9 +102,12 @@ def start_woll_ex_01(run_id):
 
     t0 = time.time()
 
-    for t in domain.evolve(yieldstep = 60.0, finaltime = 3600.0):
+    yieldstep = 60.0
+    finaltime = 3600.0
+    for t in domain.evolve(yieldstep, finaltime):
         domain.write_time()
-
+        percentage_complete = round(domain.time/domain.finaltime, 3)*100
+        write_percentage_complete(run_id, Runs, session, percentage_complete)
 
     print "Done. Nice work."
 
