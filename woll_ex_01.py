@@ -8,7 +8,9 @@ from anuga import file_function, Polygon_function, read_polygon, create_mesh_fro
 import anuga.utilities.quantity_setting_functions as qs
 import anuga.utilities.spatialInputUtil as su
 import getpass
-from ..database_utils import write_percentage_complete, query_database
+
+if __name__ != '__main__':
+    from ..database_utils import write_percentage_complete, query_database
 
 
 def start_woll_ex_01(run_id, Runs, scenario_name, Scenario, session):
@@ -16,44 +18,61 @@ def start_woll_ex_01(run_id, Runs, scenario_name, Scenario, session):
     base_dir = os.getcwd() + '/tasks/woll_ex_01'
     print "base_dir is: %s" % base_dir
 
-    #print "linux user is: " + getpass.getuser()
-    #----------------------------------------------------------------------------------------------------------------------------------------------------
-    #  ADD CATCHMENT INFORMATION HERE
-    #----------------------------------------------------------------------------------------------------------------------------------------------------
-
-    # CatchmentDictionary = {
-    #     'Model/Bdy/Fine.csv':5
-    #     }
-    #----------------------------------------------------------------------------------------------------------------------------------------------------
-    # FILENAMES, MODEL DOMAIN and VARIABLES
-    #----------------------------------------------------------------------------------------------------------------------------------------------------
+    if run_id == 'local_run':
+        base_dir = os.getcwd()
 
     basename = base_dir + '/inputs/DEM/dem_existing_01'
     outname = run_id
     meshname = base_dir + '/outputs/' + run_id + '.msh'
 
-    #----------------------------------------------------------------------------------------------------------------------------------------------------
-    # ENTER DOMAIN COORDINATES
-    #----------------------------------------------------------------------------------------------------------------------------------------------------
-    # W=301300
-    # N=6186300
-    # E=302000
-    # S=6185700
+    # TODO: The database should have already passed the right input files and downloaded them.
+    # TODO: A better strategy is to simply import all the files the inputs directories. They should already be correct.
+    if run_id == 'local_run':
+        bounding_polygon_filename = '%s/inputs/bounding_polygon/%s.shp' % (
+            base_dir, 'bdy_02')
+    else:
+        bounding_polygon_filename = '%s/inputs/bounding_polygon/%s.shp' % (
+            base_dir, query_database('bounding_polygon', run_id, Runs, session)[8:])
 
-    #------------------------------------------------------------------------------
-    # CREATING MESH
-    #------------------------------------------------------------------------------
-
-    #bounding_polygon = [[W, S], [E, S], [E, N], [W, N]]
-    #interior_regions = anuga.read_polygon_dir(CatchmentDictionary, 'Model/Bdy')
-    bounding_polygon_filename = '%s/inputs/bounding_polygon/%s.shp' % (base_dir, query_database('bounding_polygon', run_id, Runs, session)[8:])
     print 'bounding_polygon_filename: %s' % bounding_polygon_filename
     bounding_polygon = su.read_polygon(bounding_polygon_filename)
+    print 'bounding_polygon: %s' % bounding_polygon
+
+    if run_id == 'local_run':
+        interior_holes_filename = '%s/inputs/interior_holes/%s.shp' % (
+            base_dir, 'interior_holes_01')
+    else:
+        interior_holes_filename = '%s/inputs/interior_holes/%s.shp' % (
+            base_dir, query_database('interior_holes', run_id, Runs, session)[8:])
+
     try:
-        interior_holes = [].append(su.read_polygon(base_dir + '/inputs/interior_holes/interior_holes_01.shp'))
+        interior_holes = []
+        new_holes = su.read_polygon(interior_holes_filename)
+        print 'new_holes: %s' % new_holes
+        interior_holes.append(new_holes)
+        print 'interior_holes: %s' % interior_holes
     except AssertionError:
         print 'warning: no interior_holes found.'
         interior_holes = None
+
+    # Hack to see how interior_holes should look:
+    # interior_holes = [
+    #     [
+    #         [ 301724.25275325624, 6186056.2254157485 ],
+    #         [ 301761.49305447337, 6186006.8056864319 ],
+    #         [ 301750.07182667044, 6185997.1975306049 ],
+    #         [ 301711.02454357193, 6186045.4673137888 ],
+    #         [ 301724.25275325624, 6186056.2254157485 ]
+    #     ],
+    #     [
+    #         [301619.05307519296, 6186067.0245310739],
+    #         [301632.49743710633, 6186053.2145431405],
+    #         [301623.27550651436, 6186042.9487720868],
+    #         [301609.52274617978, 6186055.4096075678],
+    #         [301619.05307519296, 6186067.0245310739]
+    #     ]
+    # ]
+
     create_mesh_from_regions(bounding_polygon,
         boundary_tags={'south': [0], 'east': [1], 'north': [2], 'west': [3]},
         maximum_triangle_area=50,
@@ -93,7 +112,7 @@ def start_woll_ex_01(run_id, Runs, scenario_name, Scenario, session):
             Rainfile = base_dir + '/inputs/Rainfall/rain/rain.tms'
             polygon = su.read_polygon(Gaugefile)
             rainfall = anuga.file_function(Rainfile, quantities='rate')
-            op1 = Polygonal_rate_operator(domain, rate=rainfall, factor=1.0e-3, polygon=polygon, default_rate = 0.0)
+            op1 = Polygonal_rate_operator(domain, rate=rainfall, factor=1.0e-3, polygon=polygon, default_rate=0.0)
 
     #----------------------------------------------------------------------------------------------------------------------------------------------------
     # SETUP BOUNDARY CONDITIONS
@@ -115,21 +134,14 @@ def start_woll_ex_01(run_id, Runs, scenario_name, Scenario, session):
     yieldstep = 60.0
     finaltime = 3600.0
 
-    print type(run_id)
-    print type(Runs)
-    print type(scenario_name)
-    print type(Scenario)
-    print type(session)
-
-
     for t in domain.evolve(yieldstep, finaltime):
         domain.write_time()
         percentage_complete = round(domain.time/domain.finaltime, 3)*100
-        write_percentage_complete(run_id, Runs, scenario_name, Scenario, session, percentage_complete)
+        if run_id != 'local_run':
+            write_percentage_complete(run_id, Runs, scenario_name, Scenario, session, percentage_complete)
 
     print "Done. Nice work."
 
 if __name__ == "__main__":
     # TODO: parse argv for local development
-    run_id = 'local_'
-    start_woll_ex_01(run_id, Runs='Runs', session='session')
+    start_woll_ex_01('local_run', Runs='Runs', session='local_session', Scenario='Scenario', scenario_name='local_scenario')
