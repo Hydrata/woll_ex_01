@@ -132,7 +132,7 @@ def start_woll_ex_01(run_id, Runs, scenario_name, Scenario, session):
     t0 = time.time()
 
     yieldstep = 60.0
-    finaltime = 3600.0
+    finaltime = 7200.0
 
     for t in domain.evolve(yieldstep, finaltime):
         domain.write_time()
