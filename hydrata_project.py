@@ -5,9 +5,11 @@ print 'Setting up Simulation:- Importing Modules'
 import anuga, numpy, time, os, glob
 from anuga.operators.rate_operators import Polygonal_rate_operator
 from anuga import file_function, Polygon_function, read_polygon, create_mesh_from_regions, Domain
+from anuga import Inlet_operator
 import anuga.utilities.quantity_setting_functions as qs
 import anuga.utilities.spatialInputUtil as su
 import getpass
+from osgeo import ogr
 
 if __name__ != '__main__':
     from ..database_utils import write_percentage_complete, query_database
@@ -16,6 +18,7 @@ if __name__ != '__main__':
 def start_sim(run_id, Runs, scenario_name, Scenario, session):
     print "start_sim has fired with run_id: %s" % run_id
     base_dir = os.getcwd() + '/base_dir/%s/' % run_id
+    project_name = run_id[:10]
     print "base_dir is: %s" % base_dir
 
     if run_id == 'local_run':
@@ -81,6 +84,7 @@ def start_sim(run_id, Runs, scenario_name, Scenario, session):
     #     ]
     # ]
 
+    print 'create_mesh_from_regions'
     create_mesh_from_regions(bounding_polygon,
         boundary_tags={'south': [0], 'east': [1], 'north': [2], 'west': [3]},
         maximum_triangle_area=50,
@@ -90,19 +94,25 @@ def start_sim(run_id, Runs, scenario_name, Scenario, session):
         use_cache=False,
         verbose=True)
 
+    print 'domain'
     domain = Domain(meshname, use_cache=False, verbose=True)
     domain.set_name(outname)
     domain.set_datadir(base_dir + '/outputs')
     print domain.statistics()
 
+    print 'create poly_fun_pairs'
     poly_fun_pairs = [['Extent', elevation_data_filename.encode("utf-8")]]
+    print 'set poly_fun_pairs: %s' % poly_fun_pairs
+    print 'create topography_function'
     topography_function = qs.composite_quantity_setting_function(
         poly_fun_pairs,
         domain,
         nan_treatment='exception',
     )
+    print 'domain.set_quantity'
     domain.set_quantity('friction', 0.035)
     domain.set_quantity('stage', 0.0)
+    print 'domain.set_quantity elevation'
     domain.set_quantity('elevation', topography_function, verbose=True, alpha=0.99)
     # house_addition_function = qs.composite_quantity_setting_function(house_addition_poly_fun_pairs, domain)
     # domain.add_quantity('elevation', house_addition_function, location='centroids')
@@ -112,24 +122,84 @@ def start_sim(run_id, Runs, scenario_name, Scenario, session):
     # APPLY RAINFALL
     #----------------------------------------------------------------------------------------------------------------------------------------------------
 
-    # Rainfall_Gauge_directory = base_dir + '/inputs/rainfall_data/'
-    # for filename in os.listdir(Rainfall_Gauge_directory):
-    #     # only process shapefiles, and only then the .shp:
-    #     if '.shp' in filename:
-    #         # Gaugefile = Rainfall_Gauge_directory + filename
-    rainfile = '/home/ubuntu/anuganode/tasks/woll_ex_01/inputs/Rainfall/rain/rain.tms'
-    rainfall = anuga.file_function(rainfile, quantities='rate')
-    polygon = su.read_polygon(rain_data_filename)
-    op1 = Polygonal_rate_operator(domain, rate=rainfall, factor=1.0e-3, polygon=polygon, default_rate=0.0)
+    ogr_shapefile = ogr.Open(rain_data_filename)
+    ogr_layer = ogr_shapefile.GetLayer(0)
+    ogr_layer_definition = ogr_layer.GetLayerDefn()
+    print 'ogr_layer_definition.GetGeomType: %s' % ogr_layer_definition.GetGeomType()
+
+    print 'APPLY RAINFALL'
+    if ogr_layer_definition.GetGeomType() == 3:
+        # Rainfall_Gauge_directory = base_dir + '/inputs/rainfall_data/'
+        # for filename in os.listdir(Rainfall_Gauge_directory):
+        #     # only process shapefiles, and only then the .shp:
+        #     if '.shp' in filename:
+        #        Gaugefile = Rainfall_Gauge_directory + filename
+        #
+        if project_name == 'woll_ex_01':
+            rainfile = '/home/ubuntu/anuganode/tasks/woll_ex_01/inputs/Rainfall/rain/rain.tms'
+            rainfall = anuga.file_function(rainfile, quantities='rate')
+        else:
+            ogr_layer_feature = ogr_layer.GetNextFeature()
+            while ogr_layer_feature:
+                rain_fixed = ogr_layer_feature.GetField('rain_fixed')
+                geom = ogr_layer_feature.GetGeometryRef().GetPoints()
+                print 'in_fixed: %s' % rain_fixed
+                print 'geom: %s' % geom
+                Inlet_operator(domain, geom, rain_fixed, verbose=False)
+                ogr_layer_feature = None
+                ogr_layer_feature = ogr_layer.GetNextFeature()
+
+        # print 'dir rainfall: %s' % dir(rainfall)
+        # print 'rainfall.vertex_coordinates: %s' % rainfall.vertex_coordinates
+        # print 'rainfall.quantity_names: %s' % rainfall.quantity_names
+        # print 'rainfall.statistics: %s' % rainfall.statistics()
+        # print 'rainfall.quantities_range: %s' % rainfall.quantities_range
+        # print 'rainfall.precomputed_values: %s' % rainfall.precomputed_values
+        # print 'rainfall.index: %s' % rainfall.index
+        # print 'rainfall(): %s' % rainfall()
+        polygon = su.read_polygon(rain_data_filename)
+        Polygonal_rate_operator(domain, rate=rainfall, factor=1.0e-3, polygon=polygon, default_rate=0.0)
+
+    #----------------------------------------------------------------------------------------------------------------------------------------------------
+    # APPLY INFLOWS
+    #----------------------------------------------------------------------------------------------------------------------------------------------------
+
+    print 'APPLY INFLOWS'
+    if ogr_layer_definition.GetGeomType() == 2:
+        # print 'ogr_layer_definition.GetGeomFieldDefn: %s' % ogr_layer_definition.GetGeomFieldDefn()
+        # print 'ogr_layer_definition.GetGeomFieldCount: %s' % ogr_layer_definition.GetGeomFieldCount()
+        # print 'ogr_layer_definition.GetGeomFieldIndex: %s' % ogr_layer_definition.GetGeomFieldIndex()
+
+        print "Name  -  Type  Width  Precision"
+        for i in range(ogr_layer_definition.GetFieldCount()):
+            fieldName = ogr_layer_definition.GetFieldDefn(i).GetName()
+            fieldTypeCode = ogr_layer_definition.GetFieldDefn(i).GetType()
+            fieldType = ogr_layer_definition.GetFieldDefn(i).GetFieldTypeName(fieldTypeCode)
+            fieldWidth = ogr_layer_definition.GetFieldDefn(i).GetWidth()
+            GetPrecision = ogr_layer_definition.GetFieldDefn(i).GetPrecision()
+            print fieldName + " - " + fieldType + " " + str(fieldWidth) + " " + str(GetPrecision)
+
+        print 'ogr_layer_definition: %s' % dir(ogr_layer_definition)
+
+        ogr_layer_feature = ogr_layer.GetNextFeature()
+        while ogr_layer_feature:
+            in_fixed = ogr_layer_feature.GetField('in_fixed')
+            line = ogr_layer_feature.GetGeometryRef().GetPoints()
+            print 'in_fixed: %s' % in_fixed
+            print 'geom: %s' % line
+            Inlet_operator(domain, line, in_fixed, verbose=False)
+            ogr_layer_feature = None
+            ogr_layer_feature = ogr_layer.GetNextFeature()
 
     #----------------------------------------------------------------------------------------------------------------------------------------------------
     # SETUP BOUNDARY CONDITIONS
     #----------------------------------------------------------------------------------------------------------------------------------------------------
 
+    print 'SETUP BOUNDARY CONDITIONS'
     print 'Available boundary tags', domain.get_boundary_tags()
 
     Br = anuga.Reflective_boundary(domain)
-    Bd = anuga.Dirichlet_boundary([0.0,0.0,0.0])
+    Bd = anuga.Dirichlet_boundary([0.0, 0.0, 0.0])
 
     domain.set_boundary({'interior': Br, 'exterior': Bd, 'west': Bd, 'south': Bd, 'north': Bd, 'east': Bd})
 
@@ -137,6 +207,7 @@ def start_sim(run_id, Runs, scenario_name, Scenario, session):
     # EVOLVE SYSTEM THROUGH TIME
     #----------------------------------------------------------------------------------------------------------------------------------------------------
 
+    print 'EVOLVE SYSTEM THROUGH TIME'
     t0 = time.time()
 
     yieldstep = 60.0
