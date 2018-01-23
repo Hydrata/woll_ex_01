@@ -27,42 +27,90 @@ def start_sim(run_id, Runs, scenario_name, Scenario, session):
     outname = run_id
     meshname = base_dir + 'outputs/' + run_id + '.msh'
 
-    # TODO: The database should have already passed the right input files and downloaded them.
-    # TODO: A better strategy is to simply import all the files the inputs directories. They should already be correct.
-    # if run_id == 'local_run':
-    #     bounding_polygon_filename = '%s/inputs/bounding_polygon/%s.shp' % (
-    #         base_dir, 'bdy_02')
-    #     interior_holes_filename = '%s/inputs/interior_holes/%s.shp' % (
-    #         base_dir, 'interior_holes_01')
-    #     elevation_data_filename = '%s/inputs/elevation_data/%s.shp' % (
-    #         base_dir, 'elevation_data')
-    # else:
-    bounding_polygon_filename = '%sinputs/bounding_polygon/%s.shp' % (
-        base_dir, query_database('bounding_polygon', run_id, Runs, session)[8:])
-    interior_holes_filename = '%sinputs/interior_holes/%s.shp' % (
-        base_dir, query_database('interior_holes', run_id, Runs, session)[8:])
-    rain_data_filename = '%sinputs/rain_data/%s.shp' % (
-        base_dir, query_database('rain_data', run_id, Runs, session)[8:])
-    friction_data_filename = '%sinputs/friction_data/%s.shp' % (
-        base_dir, query_database('friction_data', run_id, Runs, session)[8:])
-    elevation_data_filename = '%sinputs/elevation_data/%s.tif' % (
-        base_dir, query_database('elevation_data', run_id, Runs, session)[8:])
+    def get_filename(data_type, file_type):
+        files = os.listdir('%sinputs/%s' % (base_dir, data_type))
+        filename = '%sinputs/%s/%s' % (base_dir,
+                                       data_type,
+                                       [f for f in files if f[-4:] == file_type][0]
+                                       )
+        return filename
+
+    bounding_polygon_filename = get_filename('bounding_polygon', '.shp')
+    elevation_data_filename = get_filename('elevation_data', '.tif')
+    try:
+        interior_holes_filename = get_filename('interior_holes', '.shp')
+    except OSError as e:
+        interior_holes_filename = None
+    try:
+        rain_data_filename = get_filename('rain_data', '.shp')
+    except OSError as e:
+        rain_data_filename = None
+    try:
+        inflow_data_filename = get_filename('inflow_data', '.shp')
+    except OSError as e:
+        inflow_data_filename = None
+    try:
+        friction_data_filename = get_filename('friction_data', '.shp')
+    except OSError as e:
+        friction_data_filename = None
+
+    # bounding_polygon_files = os.listdir('%sinputs/bounding_polygon' % base_dir)
+    # bounding_polygon_filename = '%sinputs/bounding_polygon/%s' % (
+    #     base_dir,
+    #     [shapefile for shapefile in bounding_polygon_files if shapefile[-4:] == '.shp'][0]
+    # )
+    # interior_holes_files = os.listdir('%sinputs/interior_holes' % base_dir)
+    # interior_holes_filename = '%sinputs/interior_holes/%s' % (
+    #     base_dir,
+    #     [shapefile for shapefile in interior_holes_files if shapefile[-4:] == '.shp'][0]
+    # )
+    # rain_data_files = os.listdir('%sinputs/rain_data' % base_dir)
+    # rain_data_filename = '%sinputs/rain_data/%s' % (
+    #     base_dir,
+    #     [shapefile for shapefile in rain_data_files if shapefile[-4:] == '.shp'][0]
+    # )
+    # inflow_data_files = os.listdir('%sinputs/inflow_data' % base_dir)
+    # inflow_data_filename = '%sinputs/inflow_data/%s' % (
+    #     base_dir,
+    #     [shapefile for shapefile in inflow_data_files if shapefile[-4:] == '.shp'][0]
+    # )
+    # friction_data_files = os.listdir('%sinputs/friction_data' % base_dir)
+    # friction_data_filename = '%sinputs/friction_data/%s' % (
+    #     base_dir,
+    #     [shapefile for shapefile in friction_data_files if shapefile[-4:] == '.shp'][0]
+    # )
+    # elevation_data_files = os.listdir('%sinputs/elevation_data' % base_dir)
+    # elevation_data_filename = '%sinputs/elevation_data/%s' % (
+    #     base_dir,
+    #     [shapefile for shapefile in elevation_data_files if shapefile[-4:] == '.shp'][0]
+    # )
+    # interior_holes_filename = '%sinputs/interior_holes/%s.shp' % (
+    #     base_dir, query_database('interior_holes', run_id, Runs, session)[8:])
+    # rain_data_filename = '%sinputs/rain_data/%s.shp' % (
+    #     base_dir, query_database('rain_data', run_id, Runs, session)[8:])
+    # inflow_data_filename = '%sinputs/inflow_data/%s.shp' % (
+    #     base_dir, query_database('inflow_data', run_id, Runs, session)[8:])
+    # friction_data_filename = '%sinputs/friction_data/%s.shp' % (
+    #     base_dir, query_database('friction_data', run_id, Runs, session)[8:])
+    # elevation_data_filename = '%sinputs/elevation_data/%s.tif' % (
+    #     base_dir, query_database('elevation_data', run_id, Runs, session)[8:])
 
     print 'bounding_polygon_filename: %s' % bounding_polygon_filename
     print 'interior_holes_filename: %s' % interior_holes_filename
     print 'rain_data_filename: %s' % rain_data_filename
+    print 'inflow_data_filename: %s' % inflow_data_filename
     print 'friction_data_filename: %s' % friction_data_filename
     print 'elevation_data_filename: %s' % elevation_data_filename
     bounding_polygon = su.read_polygon(bounding_polygon_filename)
     print 'bounding_polygon: %s' % bounding_polygon
 
-    try:
+    if interior_holes_filename:
         interior_holes = []
         new_holes = su.read_polygon(interior_holes_filename)
         print 'new_holes: %s' % new_holes
         interior_holes.append(new_holes)
         print 'interior_holes: %s' % interior_holes
-    except AssertionError:
+    else:
         print 'warning: no interior_holes found.'
         interior_holes = None
 
@@ -84,15 +132,49 @@ def start_sim(run_id, Runs, scenario_name, Scenario, session):
     #     ]
     # ]
 
+    #----------------------------------------------------------------------------------------------------------------------------------------------------
+    # SETUP BOUNDARY CONDITIONS
+    #----------------------------------------------------------------------------------------------------------------------------------------------------
+
+    ogr_shapefile = ogr.Open(bounding_polygon_filename)
+    ogr_layer = ogr_shapefile.GetLayer(0)
+    ogr_layer_definition = ogr_layer.GetLayerDefn()
+    print 'ogr_layer_definition.GetGeomType: %s' % ogr_layer_definition.GetGeomType()
+    print 'ogr_layer: %s' % ogr_layer
+    print 'dir(ogr_layer): %s' % dir(ogr_layer)
+    bdy_index = 0
+    bdy_tags = {}
+    bdy = {}
+
+    ogr_layer_feature = ogr_layer.GetNextFeature()
+    while ogr_layer_feature:
+        print 'bdy_index: %s' % bdy_index
+        boundary_tag_key = ogr_layer_feature.GetField('bdy_tag_k')
+        boundary_tag_value = ogr_layer_feature.GetField('bdy_tag_v')
+        bdy_tags[boundary_tag_key] = [bdy_index * 2, bdy_index * 2 + 1]
+        bdy[boundary_tag_key] = boundary_tag_value
+        geom = ogr_layer_feature.GetGeometryRef().GetPoints()
+        print 'boundary_tag_key: %s' % boundary_tag_key
+        print 'boundary_tag_value: %s' % boundary_tag_value
+        print 'geom: %s' % geom
+        ogr_layer_feature = None
+        ogr_layer_feature = ogr_layer.GetNextFeature()
+        bdy_index = bdy_index + 1
+        print 'bdy_tags: %s' % bdy_tags
+
+    print 'bdy: %s' % bdy
     print 'create_mesh_from_regions'
-    create_mesh_from_regions(bounding_polygon,
-        boundary_tags={'south': [0], 'east': [1], 'north': [2], 'west': [3]},
+
+    create_mesh_from_regions(
+        bounding_polygon,
+        boundary_tags=bdy_tags,
         maximum_triangle_area=50,
         interior_regions=None,
         interior_holes=interior_holes,
         filename=meshname,
         use_cache=False,
-        verbose=True)
+        verbose=True
+    )
 
     print 'domain'
     domain = Domain(meshname, use_cache=False, verbose=True)
@@ -122,41 +204,26 @@ def start_sim(run_id, Runs, scenario_name, Scenario, session):
     # APPLY RAINFALL
     #----------------------------------------------------------------------------------------------------------------------------------------------------
 
-    ogr_shapefile = ogr.Open(rain_data_filename)
-    ogr_layer = ogr_shapefile.GetLayer(0)
-    ogr_layer_definition = ogr_layer.GetLayerDefn()
-    print 'ogr_layer_definition.GetGeomType: %s' % ogr_layer_definition.GetGeomType()
-
     print 'APPLY RAINFALL'
-    if ogr_layer_definition.GetGeomType() == 3:
-        # Rainfall_Gauge_directory = base_dir + '/inputs/rainfall_data/'
-        # for filename in os.listdir(Rainfall_Gauge_directory):
-        #     # only process shapefiles, and only then the .shp:
-        #     if '.shp' in filename:
-        #        Gaugefile = Rainfall_Gauge_directory + filename
-        #
+    if rain_data_filename:
+        ogr_shapefile = ogr.Open(rain_data_filename)
+        ogr_layer = ogr_shapefile.GetLayer(0)
+        ogr_layer_definition = ogr_layer.GetLayerDefn()
+        print 'ogr_layer_definition.GetGeomType: %s' % ogr_layer_definition.GetGeomType()
+        rainfall = 0
         if project_name == 'woll_ex_01':
             rainfile = '/home/ubuntu/anuganode/tasks/woll_ex_01/inputs/Rainfall/rain/rain.tms'
             rainfall = anuga.file_function(rainfile, quantities='rate')
         else:
             ogr_layer_feature = ogr_layer.GetNextFeature()
             while ogr_layer_feature:
-                rain_fixed = ogr_layer_feature.GetField('rain_fixed')
+                rainfall = ogr_layer_feature.GetField('rain_fixed')
                 geom = ogr_layer_feature.GetGeometryRef().GetPoints()
-                print 'in_fixed: %s' % rain_fixed
+                print 'rain_fixed: %s' % rainfall
                 print 'geom: %s' % geom
-                Inlet_operator(domain, geom, rain_fixed, verbose=False)
+                Inlet_operator(domain, geom, rainfall, verbose=False)
                 ogr_layer_feature = None
                 ogr_layer_feature = ogr_layer.GetNextFeature()
-
-        # print 'dir rainfall: %s' % dir(rainfall)
-        # print 'rainfall.vertex_coordinates: %s' % rainfall.vertex_coordinates
-        # print 'rainfall.quantity_names: %s' % rainfall.quantity_names
-        # print 'rainfall.statistics: %s' % rainfall.statistics()
-        # print 'rainfall.quantities_range: %s' % rainfall.quantities_range
-        # print 'rainfall.precomputed_values: %s' % rainfall.precomputed_values
-        # print 'rainfall.index: %s' % rainfall.index
-        # print 'rainfall(): %s' % rainfall()
         polygon = su.read_polygon(rain_data_filename)
         Polygonal_rate_operator(domain, rate=rainfall, factor=1.0e-3, polygon=polygon, default_rate=0.0)
 
@@ -165,22 +232,11 @@ def start_sim(run_id, Runs, scenario_name, Scenario, session):
     #----------------------------------------------------------------------------------------------------------------------------------------------------
 
     print 'APPLY INFLOWS'
-    if ogr_layer_definition.GetGeomType() == 2:
-        # print 'ogr_layer_definition.GetGeomFieldDefn: %s' % ogr_layer_definition.GetGeomFieldDefn()
-        # print 'ogr_layer_definition.GetGeomFieldCount: %s' % ogr_layer_definition.GetGeomFieldCount()
-        # print 'ogr_layer_definition.GetGeomFieldIndex: %s' % ogr_layer_definition.GetGeomFieldIndex()
-
-        print "Name  -  Type  Width  Precision"
-        for i in range(ogr_layer_definition.GetFieldCount()):
-            fieldName = ogr_layer_definition.GetFieldDefn(i).GetName()
-            fieldTypeCode = ogr_layer_definition.GetFieldDefn(i).GetType()
-            fieldType = ogr_layer_definition.GetFieldDefn(i).GetFieldTypeName(fieldTypeCode)
-            fieldWidth = ogr_layer_definition.GetFieldDefn(i).GetWidth()
-            GetPrecision = ogr_layer_definition.GetFieldDefn(i).GetPrecision()
-            print fieldName + " - " + fieldType + " " + str(fieldWidth) + " " + str(GetPrecision)
-
+    if inflow_data_filename:
+        ogr_shapefile = ogr.Open(inflow_data_filename)
+        ogr_layer = ogr_shapefile.GetLayer(0)
+        ogr_layer_definition = ogr_layer.GetLayerDefn()
         print 'ogr_layer_definition: %s' % dir(ogr_layer_definition)
-
         ogr_layer_feature = ogr_layer.GetNextFeature()
         while ogr_layer_feature:
             in_fixed = ogr_layer_feature.GetField('in_fixed')
@@ -192,16 +248,18 @@ def start_sim(run_id, Runs, scenario_name, Scenario, session):
             ogr_layer_feature = ogr_layer.GetNextFeature()
 
     #----------------------------------------------------------------------------------------------------------------------------------------------------
-    # SETUP BOUNDARY CONDITIONS
+    # APPLY BOUNDARY CONDITIONS
     #----------------------------------------------------------------------------------------------------------------------------------------------------
 
-    print 'SETUP BOUNDARY CONDITIONS'
+    print 'APPLY BOUNDARY CONDITIONS'
     print 'Available boundary tags', domain.get_boundary_tags()
 
     Br = anuga.Reflective_boundary(domain)
     Bd = anuga.Dirichlet_boundary([0.0, 0.0, 0.0])
 
-    domain.set_boundary({'interior': Br, 'exterior': Bd, 'west': Bd, 'south': Bd, 'north': Bd, 'east': Bd})
+    print 'bdy: %s' % bdy
+
+    domain.set_boundary(bdy)
 
     #----------------------------------------------------------------------------------------------------------------------------------------------------
     # EVOLVE SYSTEM THROUGH TIME
