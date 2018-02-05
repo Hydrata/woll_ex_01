@@ -81,8 +81,6 @@ def start_sim(run_id, Runs, scenario_name, Scenario, session):
             ogr_layer_feature = ogr_layer.GetNextFeature()
 
         print 'structures: %s' % structures
-        structures = [structures[0], structures[1], structures[2], structures[3], structures[4]]
-        print 'structures: %s' % structures
     else:
         print 'warning: no structures found.'
         structures = None
