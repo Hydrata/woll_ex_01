@@ -6,8 +6,10 @@ import anuga, numpy, time, os, glob
 from anuga.operators.rate_operators import Polygonal_rate_operator
 from anuga import file_function, Polygon_function, read_polygon, create_mesh_from_regions, Domain
 from anuga import Inlet_operator
+from anuga import myid, distribute, finalize, barrier
 import anuga.utilities.quantity_setting_functions as qs
 import anuga.utilities.spatialInputUtil as su
+from anuga.utilities import plot_utils as util
 import json
 from osgeo import ogr
 
@@ -15,7 +17,11 @@ if __name__ != '__main__':
     from ..database_utils import write_percentage_complete, query_database
 
 
-def start_sim(run_id, Runs, scenario_name, Scenario, session):
+def start_sim(run_id, Runs, scenario_name, Scenario, session, **kwargs):
+    yieldstep = kwargs['yieldstep']
+    finaltime = kwargs['finaltime']
+    max_triangle_area = kwargs['max_triangle_area']
+    print 'max_triangle_area: %sm2' % max_triangle_area
     print "start_sim has fired with run_id: %s" % run_id
     base_dir = os.getcwd() + '/base_dir/%s/' % run_id
     project_name = run_id[:10]
@@ -122,7 +128,7 @@ def start_sim(run_id, Runs, scenario_name, Scenario, session):
     create_mesh_from_regions(
         bounding_polygon,
         boundary_tags=bdy_tags,
-        maximum_triangle_area=2,
+        maximum_triangle_area=max_triangle_area,
         interior_regions=None,
         interior_holes=structures,
         filename=meshname,
@@ -165,7 +171,7 @@ def start_sim(run_id, Runs, scenario_name, Scenario, session):
                 ogr_layer_feature = None
                 ogr_layer_feature = ogr_layer.GetNextFeature()
         polygon = su.read_polygon(rain_data_filename)
-        Polygonal_rate_operator(domain, rate=rainfall, factor=1.0e-3, polygon=polygon, default_rate=0.0)
+        Polygonal_rate_operator(domain, rate=rainfall, factor=1.0e-6, polygon=polygon, default_rate=0.0)
 
     #----------------------------------------------------------------------------------------------------------------------------------------------------
     # APPLY INFLOWS
@@ -216,19 +222,41 @@ def start_sim(run_id, Runs, scenario_name, Scenario, session):
     #----------------------------------------------------------------------------------------------------------------------------------------------------
     # EVOLVE SYSTEM THROUGH TIME
     #----------------------------------------------------------------------------------------------------------------------------------------------------
-
+    domain = distribute(domain)
     print 'EVOLVE SYSTEM THROUGH TIME'
     t0 = time.time()
 
-    yieldstep = 60.0
-    finaltime = 3600.0
+    # yieldstep = 10.0
+    # finaltime = 100.0
 
     for t in domain.evolve(yieldstep, finaltime):
         domain.write_time()
         percentage_complete = round(domain.time/domain.finaltime, 3)*100
         if run_id != 'local_run':
             write_percentage_complete(run_id, Runs, scenario_name, Scenario, session, percentage_complete)
-
+    domain.sww_merge(delete_old=True)
+    barrier()
+    finalize()
+    sww_file = base_dir + '/outputs/' + run_id + '.sww'
+    sww_file = sww_file.encode('utf-8', 'ignore')  # sometimes run_id gets turned to a unicode object by celery
+    util.Make_Geotif(
+        swwFile=sww_file,
+        output_quantities=['depth'],
+        myTimeStep='max',
+        CellSize=1.0,
+        lower_left=None,
+        upper_right=None,
+        EPSG_CODE=28356,
+        proj4string=None,
+        velocity_extrapolation=True,
+        min_allowed_height=1.0e-05,
+        output_dir=(base_dir + '/outputs/'),
+        bounding_polygon=bounding_polygon,
+        internal_holes=structures,
+        verbose=False,
+        k_nearest_neighbours=3,
+        creation_options=[]
+    )
     print "Done. Nice work."
 
 if __name__ == "__main__":
