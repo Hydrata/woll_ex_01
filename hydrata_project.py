@@ -161,17 +161,22 @@ def start_sim(run_id, Runs, scenario_name, Scenario, session, **kwargs):
         ogr_layer = ogr_shapefile.GetLayer(0)
         ogr_layer_definition = ogr_layer.GetLayerDefn()
         rainfall = 0
-        if project_name == 'woll_ex_01':
-            rainfile = '/home/ubuntu/anuganode/tasks/woll_ex_01/inputs/Rainfall/rain/rain.tms'
-            rainfall = anuga.file_function(rainfile, quantities='rate')
-        else:
+# if project_name == 'woll_ex_01':
+#     rainfile = '/home/ubuntu/anuganode/tasks/woll_ex_01/inputs/Rainfall/rain/rain.tms'
+#     rainfall = anuga.file_function(rainfile, quantities='rate')
+# else:
+        ogr_layer_feature = ogr_layer.GetNextFeature()
+        while ogr_layer_feature:
+            rainfall = int(ogr_layer_feature.GetField('rate_mm_hr'))
+            polygon = su.read_polygon(rain_data_filename)
+            print "applying Polygonal_rate_operator with rate, polygon:"
+            print type(rainfall)
+            print rainfall
+            print polygon
+            Polygonal_rate_operator(domain, rate=rainfall, factor=1.0e-6, polygon=polygon, default_rate=0.0)
+            ogr_layer_feature = None
             ogr_layer_feature = ogr_layer.GetNextFeature()
-            while ogr_layer_feature:
-                rainfall = ogr_layer_feature.GetField('rate_mm_hr')
-                ogr_layer_feature = None
-                ogr_layer_feature = ogr_layer.GetNextFeature()
-        polygon = su.read_polygon(rain_data_filename)
-        Polygonal_rate_operator(domain, rate=rainfall, factor=1.0e-6, polygon=polygon, default_rate=0.0)
+
 
     #----------------------------------------------------------------------------------------------------------------------------------------------------
     # APPLY INFLOWS
@@ -184,8 +189,12 @@ def start_sim(run_id, Runs, scenario_name, Scenario, session, **kwargs):
         ogr_layer_definition = ogr_layer.GetLayerDefn()
         ogr_layer_feature = ogr_layer.GetNextFeature()
         while ogr_layer_feature:
-            in_fixed = ogr_layer_feature.GetField('in_fixed')
+            in_fixed = int(ogr_layer_feature.GetField('in_fixed'))
             line = ogr_layer_feature.GetGeometryRef().GetPoints()
+            print "applying Inlet_operator with domain, line, in_fixed:"
+            print domain
+            print line
+            print in_fixed
             Inlet_operator(domain, line, in_fixed, verbose=False)
             ogr_layer_feature = None
             ogr_layer_feature = ogr_layer.GetNextFeature()
@@ -252,7 +261,7 @@ def start_sim(run_id, Runs, scenario_name, Scenario, session, **kwargs):
         min_allowed_height=1.0e-05,
         output_dir=(base_dir + '/outputs/'),
         bounding_polygon=bounding_polygon,
-        internal_holes=structures,
+        # internal_holes=structures,
         verbose=False,
         k_nearest_neighbours=3,
         creation_options=[]
